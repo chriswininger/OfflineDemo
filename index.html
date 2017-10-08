@@ -1,0 +1,178 @@
+<html>
+	<head>
+		<title>Offline Demo</title>
+		<input type="text" value="" id="txtValue" />
+		<button onClick="runUpdate()">Update</button>
+		<div>
+			<input type="text" value="", id="txtValue2" />
+			<button onClick="runUpdate2()">Update 2</button>
+		</div>
+	</head>
+	<body>
+		<script type="text/javascript">
+			var dbName = 'offlinestorage';
+			var dbVersion = 10;
+			var artificialDelay = 3000; // 3 second delay
+			var txtValue = document.getElementById('txtValue');
+			var txtValue2 = document.getElementById('txtValue2');
+			var db;
+
+			txtValue2.value = localStorage.foo || 0;
+			// initialize our database
+			_initDB(function(err) {
+				if (err)
+					return console.warn(err);
+
+				console.log('try to update the index');
+				// open the db to update our index
+				var open = indexedDB.open(dbName, dbVersion);
+				open.onsuccess = function(event) {
+					console.log('database initialized');
+					db = open.result;
+
+					// read the current value and update the textbox with it
+					readValue(open.result, function(err, val) {
+						if (err)
+							return console.warn('err: ' + err);
+
+							txtValue.value = val;
+					});
+					//_afterInitialization(open.result);
+				};
+			});
+
+			// ==== Helpers ====
+    		function _initDB(complete) {
+    			var openReq = indexedDB.open(dbName, dbVersion);
+      			openReq.onupgradeneeded = function() {
+      				console.log('onupgradeneeded');
+        			var db = openReq.result;
+        			if (!db.objectStoreNames.contains(dbName)) {
+						console.log('creating the objectstore for the first time');
+						db.createObjectStore(dbName);
+ 					}
+
+    				db.onsuccess = function() {
+    					complete();
+    				};
+    				db.onerror = function() {
+
+    				};
+      			};
+      			openReq.onsuccess = function() {
+      				console.log('done creating objectstore');
+      				complete();
+      			};
+      			openReq.onerror = function() {
+      				complete('error initializing the database');
+				};
+			}
+
+			function readValue(db, complete) {
+				var transaction = db.transaction([dbName], 'readwrite');
+
+				// === get the index and upate it ===
+				var objectStore = transaction.objectStore(dbName);
+				var i = 0;
+				var getCounterRequest = objectStore.get('counter');
+				getCounterRequest.onsuccess = function() {
+					var iObj = getCounterRequest.result;
+					if (iObj)
+						i = iObj;
+
+					complete(null, i);
+				};
+			}
+
+			function incrementValue(db, complete) {
+				console.log('_afterInitialization called');
+				var transaction = db.transaction([dbName], 'readwrite');
+
+				// === get the index and upate it ===
+				var objectStore = transaction.objectStore(dbName);
+				var i = 0;
+				var getCounterRequest = objectStore.get('counter');
+				getCounterRequest.onsuccess = function() {
+					var iObj = getCounterRequest.result;
+
+					console.log('getConterRequest.result: ' + iObj);
+					if (iObj)
+						i = iObj;
+
+					console.log('wait for delay: ' + artificialDelay);
+					var dt = Date.now();
+					do {
+						// The old Seinfeld trick, a loop about nothing
+					} while(Date.now() - dt < artificialDelay);		
+			
+					// purposely delay the write to prove a point
+			 		var putCounterRequest = objectStore.put(i + 1, 'counter');
+					putCounterRequest.onsuccess = function() {
+						console.log('put request success');
+					};
+
+					// === transaction has left scope and is complete ===
+					transaction.onerror = function(event) {
+						complete('error opening transaction');
+					};
+
+					transaction.oncomplete = function() {
+						console.log('HOLY HELL WE UPDATED THE INDEX to ' + (i + 1) + '!');
+						complete(null, i + 1);
+					};
+
+					// Below will not work, once we go async js ends the transaction
+					/*setTimeout(function() {
+						var putCounterRequest = objectStore.put(i + 1, 'counter');
+						putCounterRequest.onsuccess = function() {
+							console.log('put request success');
+						};
+
+						// === transaction has left scope and is complete ===
+						transaction.onerror = function(event) {
+							complete('error opening transaction');
+						};
+
+						transaction.oncomplete = function() {
+							console.log('HOLY HELL WE UPDATED THE INDEX to ' + (i + 1) + '!');
+							complete(null, i + 1);
+						};
+
+					}, artificialDelay);*/
+				};
+			}
+
+			// ===== Event Handlers =====
+			function runUpdate() {
+				if (!db)
+					return console.warn('the database was not initialized');
+
+					// increment the value and update the text box
+					incrementValue(db, function(err, val) {
+						if (err)
+							return console.warn('error: ' + err);
+
+						txtValue.value = val;
+					});
+			}
+
+			function runUpdate2() {
+				var i = localStorage.foo;
+				if (i === null || i === undefined)
+					i = 0;
+				else
+					i = parseInt(i);
+			
+				var dt = Date.now();	
+				do {
+					// The old Seinfeld trick, a loop about nothing
+				} while(Date.now() - dt < artificialDelay);
+			
+				localStorage.foo = i + 1;
+
+				txtValue2.value = localStorage.foo;
+			}
+
+		</script>
+	</body>
+</html>
